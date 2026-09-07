@@ -1,6 +1,6 @@
 {
   "name": "spark-godot-mcp-railway",
-  "version": "4.0.0",
+  "version": "4.3.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -14,7 +14,8 @@
     "@modelcontextprotocol/server": "^2.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "express": "^5.1.0",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "zod": "^4.2.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",

@@ -3,6 +3,7 @@ import http from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
+import * as z from "zod/v4";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const DEVICE_TOKEN = process.env.DEVICE_TOKEN ?? "";
@@ -49,13 +50,13 @@ function textResult(text: string) {
 
 const mcpHandler = createMcpHandler(() => {
   const server = new McpServer(
-    { name: "spark-godot-bridge", version: "4.0.0" },
+    { name: "spark-godot-bridge", version: "4.3.0" },
     { capabilities: { tools: {} } }
   );
 
   server.registerTool("godot_status", {
     description: "Get the live Godot Android agent status.",
-    inputSchema: {}
+    inputSchema: z.object({})
   }, async () => textResult(JSON.stringify({
     connected: !!godotSocket && godotSocket.readyState === WebSocket.OPEN,
     lastSeen: lastGodotSeen,
@@ -64,7 +65,9 @@ const mcpHandler = createMcpHandler(() => {
 
   server.registerTool("project_tree", {
     description: "List the Godot project tree via the connected agent.",
-    inputSchema: { path: { type: "string", description: "res:// path", default: "res://" } }
+    inputSchema: z.object({
+      path: z.string().default("res://").describe("res:// path")
+    })
   }, async ({ path = "res://" }) => {
     const result = await sendToGodot({ method: "project_tree", params: { path } });
     return textResult(JSON.stringify(result));
@@ -72,7 +75,9 @@ const mcpHandler = createMcpHandler(() => {
 
   server.registerTool("read_file", {
     description: "Read a text file inside the Godot project.",
-    inputSchema: { path: { type: "string", description: "res:// path" } }
+    inputSchema: z.object({
+      path: z.string().describe("res:// path")
+    })
   }, async ({ path }) => {
     const result = await sendToGodot({ method: "read_file", params: { path } });
     return textResult(JSON.stringify(result));
@@ -80,10 +85,10 @@ const mcpHandler = createMcpHandler(() => {
 
   server.registerTool("write_file", {
     description: "Write or replace a text file inside the Godot project.",
-    inputSchema: {
-      path: { type: "string", description: "res:// path" },
-      content: { type: "string", description: "file contents" }
-    }
+    inputSchema: z.object({
+      path: z.string().describe("res:// path"),
+      content: z.string().describe("file contents")
+    })
   }, async ({ path, content }) => {
     const result = await sendToGodot({ method: "write_file", params: { path, content } });
     return textResult(JSON.stringify(result));
@@ -91,9 +96,12 @@ const mcpHandler = createMcpHandler(() => {
 
   server.registerTool("write_files_batch", {
     description: "Create or replace many project text files in one operation.",
-    inputSchema: {
-      files: { type: "array", description: "Array of {path,content}" }
-    }
+    inputSchema: z.object({
+      files: z.array(z.object({
+        path: z.string(),
+        content: z.string()
+      })).describe("Array of {path,content}")
+    })
   }, async ({ files }) => {
     const result = await sendToGodot({ method: "write_files_batch", params: { files } });
     return textResult(JSON.stringify(result));
@@ -101,10 +109,10 @@ const mcpHandler = createMcpHandler(() => {
 
   server.registerTool("search_files", {
     description: "Search project text files for a string.",
-    inputSchema: {
-      query: { type: "string" },
-      root: { type: "string", description: "res:// path", default: "res://" }
-    }
+    inputSchema: z.object({
+      query: z.string(),
+      root: z.string().default("res://").describe("res:// path")
+    })
   }, async ({ query, root = "res://" }) => {
     const result = await sendToGodot({ method: "search_files", params: { query, root } });
     return textResult(JSON.stringify(result));
@@ -112,11 +120,11 @@ const mcpHandler = createMcpHandler(() => {
 
   server.registerTool("create_scene", {
     description: "Create a .tscn scene file from a scene definition.",
-    inputSchema: {
-      path: { type: "string" },
-      root_type: { type: "string", default: "Node2D" },
-      root_name: { type: "string", default: "Main" }
-    }
+    inputSchema: z.object({
+      path: z.string(),
+      root_type: z.string().default("Node2D"),
+      root_name: z.string().default("Main")
+    })
   }, async (params) => {
     const result = await sendToGodot({ method: "create_scene", params: params as JsonObject });
     return textResult(JSON.stringify(result));
@@ -124,12 +132,12 @@ const mcpHandler = createMcpHandler(() => {
 
   server.registerTool("create_node", {
     description: "Create a node in an existing scene.",
-    inputSchema: {
-      scene: { type: "string" },
-      parent: { type: "string", default: "." },
-      type: { type: "string" },
-      name: { type: "string" }
-    }
+    inputSchema: z.object({
+      scene: z.string(),
+      parent: z.string().default("."),
+      type: z.string(),
+      name: z.string()
+    })
   }, async (params) => {
     const result = await sendToGodot({ method: "create_node", params: params as JsonObject });
     return textResult(JSON.stringify(result));
@@ -137,12 +145,12 @@ const mcpHandler = createMcpHandler(() => {
 
   server.registerTool("set_node_property", {
     description: "Set a node property in an editable scene.",
-    inputSchema: {
-      scene: { type: "string" },
-      node: { type: "string" },
-      property: { type: "string" },
-      value: {}
-    }
+    inputSchema: z.object({
+      scene: z.string(),
+      node: z.string(),
+      property: z.string(),
+      value: z.unknown()
+    })
   }, async (params) => {
     const result = await sendToGodot({ method: "set_node_property", params: params as JsonObject });
     return textResult(JSON.stringify(result));
@@ -150,7 +158,7 @@ const mcpHandler = createMcpHandler(() => {
 
   server.registerTool("run_project", {
     description: "Ask the Godot Android agent to start the configured project test workflow.",
-    inputSchema: {}
+    inputSchema: z.object({})
   }, async () => {
     const result = await sendToGodot({ method: "run_project", params: {} });
     return textResult(JSON.stringify(result));
@@ -158,7 +166,7 @@ const mcpHandler = createMcpHandler(() => {
 
   server.registerTool("get_debug_errors", {
     description: "Get recent Godot runtime/editor errors collected by the agent.",
-    inputSchema: {}
+    inputSchema: z.object({})
   }, async () => {
     const result = await sendToGodot({ method: "get_debug_errors", params: {} });
     return textResult(JSON.stringify(result));
@@ -166,7 +174,7 @@ const mcpHandler = createMcpHandler(() => {
 
   server.registerTool("screenshot", {
     description: "Capture a screenshot from the Godot runtime if supported by the agent.",
-    inputSchema: {}
+    inputSchema: z.object({})
   }, async () => {
     const result = await sendToGodot({ method: "screenshot", params: {} });
     return textResult(JSON.stringify(result));
@@ -175,21 +183,23 @@ const mcpHandler = createMcpHandler(() => {
   return server;
 });
 
+const mcpNodeHandler = toNodeHandler(mcpHandler);
+
 app.get("/health", (_req: Request, res: Response) => {
   res.json({
     ok: true,
     godotConnected: !!godotSocket && godotSocket.readyState === WebSocket.OPEN,
-    version: "4.0.0",
+    version: "4.3.0",
     lastGodotSeen
   });
 });
 
 app.get("/", (_req: Request, res: Response) => {
-  res.type("text/plain").send("Spark Godot MCP Bridge 4.0.0");
+  res.type("text/plain").send("Spark Godot MCP Bridge 4.3.0");
 });
 
 app.all("/mcp", (req: Request, res: Response) => {
-  toNodeHandler(mcpHandler)(req, res);
+  mcpNodeHandler(req, res);
 });
 
 const server = http.createServer(app);
@@ -229,11 +239,11 @@ wss.on("connection", ws => {
 
   ws.send(JSON.stringify({
     type: "bridge_ready",
-    version: "4.0.0",
+    version: "4.3.0",
     timestamp: Date.now()
   }));
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Spark Godot MCP Bridge 4.0.0 listening on ${PORT}`);
+  console.log(`Spark Godot MCP Bridge 4.3.0 listening on ${PORT}`);
 });
