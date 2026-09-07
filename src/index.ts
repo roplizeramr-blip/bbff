@@ -1,4 +1,3 @@
-\
 import express, { Request, Response } from "express";
 import http from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
